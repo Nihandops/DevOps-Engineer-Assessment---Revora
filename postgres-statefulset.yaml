@@ -1,0 +1,101 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: pg
+  namespace: pg-ha
+spec:
+  serviceName: pg-headless
+  replicas: 3
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+        cluster-name: pg-ha-cluster
+    spec:
+      serviceAccountName: patroni
+      containers:
+      - name: postgres
+        image: postgres:16
+        command: ["/bin/bash", "-c"]
+        args:
+          - |
+            set -e
+            apt-get update && apt-get install -y --no-install-recommends patroni python3-kubernetes python3-psycopg2
+
+            # Mount point is /home/postgres/data; Patroni manages /home/postgres/data/pgdata inside it
+            mkdir -p /home/postgres/data/pgdata
+            chown -R postgres:postgres /home/postgres/data
+            chmod 0700 /home/postgres/data/pgdata
+
+            python3 -c '
+            import os
+            with open("/config/patroni.yml") as f:
+                cfg = f.read()
+            for k in ["POD_NAME", "POD_IP", "SUPERUSER_PASSWORD", "REPLICATION_PASSWORD"]:
+                cfg = cfg.replace("$(" + k + ")", os.environ[k])
+            with open("/tmp/patroni.yml", "w") as f:
+                f.write(cfg)
+            '
+            chown postgres:postgres /tmp/patroni.yml
+
+            export PATH="/usr/lib/postgresql/16/bin:${PATH}"
+            exec su -p -s /bin/bash postgres -c "patroni /tmp/patroni.yml"
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        - name: SUPERUSER_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: pg-superuser
+              key: password
+        - name: REPLICATION_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: pg-replication
+              key: password
+        - name: PGDATA
+          value: /home/postgres/data/pgdata
+        ports:
+        - containerPort: 5432
+          name: postgres
+        - containerPort: 8008
+          name: patroni
+        volumeMounts:
+        - name: data
+          mountPath: /home/postgres/data
+        - name: config
+          mountPath: /config
+        readinessProbe:
+          httpGet:
+            path: /readiness
+            port: 8008
+          initialDelaySeconds: 20
+          periodSeconds: 5
+        livenessProbe:
+          httpGet:
+            path: /liveness
+            port: 8008
+          initialDelaySeconds: 60
+          periodSeconds: 10
+      volumes:
+      - name: config
+        configMap:
+          name: patroni-config
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      storageClassName: local-path
+      resources:
+        requests:
+          storage: 5Gi

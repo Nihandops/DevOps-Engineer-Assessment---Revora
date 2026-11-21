@@ -1,0 +1,49 @@
+# Headless service for StatefulSet (required)
+apiVersion: v1
+kind: Service
+metadata:
+  name: pg-headless
+  namespace: pg-ha
+spec:
+  clusterIP: None
+  selector:
+    app: postgres
+  ports:
+  - port: 5432
+    name: postgres
+
+---
+# Read-Write service: routes ONLY to the primary
+# Patroni sets label role=master on the leader pod
+apiVersion: v1
+kind: Service
+metadata:
+  name: pg-primary
+  namespace: pg-ha
+spec:
+  type: ClusterIP
+  selector:
+    app: postgres
+    role: master  # Patroni-managed label
+  ports:
+  - port: 5432
+    targetPort: 5432
+    name: postgres
+
+---
+# Read-Only service: routes to replicas
+# Patroni sets label role=replica on follower pods
+apiVersion: v1
+kind: Service
+metadata:
+  name: pg-replicas
+  namespace: pg-ha
+spec:
+  type: ClusterIP
+  selector:
+    app: postgres
+    role: replica  # Patroni-managed label
+  ports:
+  - port: 5432
+    targetPort: 5432
+    name: postgres
