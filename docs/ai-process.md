@@ -33,7 +33,7 @@ If I were tasked with building **"HA Redis with Sentinel on Kubernetes"** or **"
     *   `ConfigMap.yaml` (Vault uses HCL configuration, not YAML; Redis uses `redis.conf`).
     *   The backup strategy (Redis uses RDB/AOF, not pgBackRest).
 
-## 4. Second AI Agent Comparison (Optional Requirement)
+## 4. Second AI Agent Comparison 
 To test the repeatability of the process, I ran the **failover implementation phase** (generating the Patroni configuration) through a second, different AI agent.
 
 *   **Similarities:** Both agents correctly identified that `synchronous_mode: true` was required for an RPO of zero. Both agents correctly used the Kubernetes API block (`kubernetes: namespace: pg-ha`) instead of configuring an external etcd cluster. Both correctly set `use_pg_rewind: true` to handle rejoining the old primary.
