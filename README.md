@@ -25,7 +25,7 @@ This project deploys a highly available PostgreSQL 16 cluster on a single-node K
 
 ## 2. Prerequisites
 
-- Ubuntu Server 24.04 VM
+- Ubuntu Server 22.04 VM
 - k3s installed
 - `kubectl` and `make` installed
 
